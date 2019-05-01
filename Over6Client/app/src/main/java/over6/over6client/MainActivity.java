@@ -12,7 +12,8 @@ import java.io.FileOutputStream;
 
 
 public class MainActivity extends AppCompatActivity {
-    String  fifo_name = "/data/data/over6.over6client/myfifo";
+    String  ip_name = "/data/data/over6.over6client/ip";
+    String  data_name = "/data/data/over6.over6client/data";
 
     //读取C管道
     protected String read_file(String name){
@@ -53,9 +54,9 @@ public class MainActivity extends AppCompatActivity {
 //        setContentView(R.layout.activity_main);
         TextView textView = new TextView(this);
         StringFromJNI();
-        textView.setText(read_file(fifo_name));
+        textView.setText(read_file(ip_name));
         setContentView(textView);
-        write_file(fifo_name, "hello from android");
+        write_file(data_name, "hello from android");
     }
     public native String StringFromJNI();
     static {
