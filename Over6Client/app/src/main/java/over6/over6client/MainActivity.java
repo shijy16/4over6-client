@@ -14,6 +14,8 @@ import java.io.FileOutputStream;
 public class MainActivity extends AppCompatActivity {
     String  ip_name = "/data/data/over6.over6client/ip";
     String  data_name = "/data/data/over6.over6client/data";
+    int isCStart = 0;
+    private Thread cThread;
 
     //读取C管道
     protected String read_file(String name){
@@ -42,18 +44,38 @@ public class MainActivity extends AppCompatActivity {
             out.close();
             return true;
         }catch(Exception e){
-            Log.d("jni","write failed"+e.getStackTrace());
+            Log.d("jni", "write failed" + e.getStackTrace());
             return false;
         }
     }
 
+    //创建C线程
+    protected boolean startBackgroundC(){
+        if (isCStart == 0) {
+            cThread = new Thread() {
+                @Override
+                public void run() {
+                    StringFromJNI();
+                }
+            };
+            cThread.start();
+        }
+        return true;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 //        setContentView(R.layout.activity_main);
         TextView textView = new TextView(this);
-        StringFromJNI();
+        //开启后台C进程
+        startBackgroundC();
+        try {
+            wait(1000);
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        //管道读取、写入测试
         textView.setText(read_file(ip_name));
         setContentView(textView);
         write_file(data_name, "hello from android");
