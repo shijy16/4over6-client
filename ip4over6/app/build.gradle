@@ -4,24 +4,13 @@ android {
     compileSdkVersion 23
     buildToolsVersion "23.0.1"
 
-    sourceSets{
-        main{
-            jniLibs.srcDirs = ['libs']
-        }
-    }
-
     defaultConfig {
-        applicationId "over6.over6client"
+        applicationId "over6.ip4over6"
         minSdkVersion 19
         targetSdkVersion 23
         versionCode 1
         versionName "1.0"
-        ndk{
-            moduleName "hellojni"
-            ldLibs "log"
-        }
     }
-
     buildTypes {
         release {
             minifyEnabled false
