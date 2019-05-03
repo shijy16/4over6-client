@@ -1,5 +1,28 @@
-#include "over6_over6client_MainActivity.h"
-#include "util.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+
+
+#define SERVER_ADDR "2402:f000:4:72:808::6b04"
+#define SERVER_PORT 5678
+#define IP_REQ 100
+#define IP_REP 101
+#define DATA_SEND 102
+#define DATA_RECV 103
+#define HEARTBEAT 104
+
+#define LOG(...) printf(__VA_ARGS__)
+
+struct Msg {
+    int length;		//整个结构体的字节长度
+    char type;		//类型
+    char data[4096];	//数据段
+};
 
 struct IP_recv{
     int is_recv;
@@ -38,19 +61,20 @@ int out_size = 0;
 
 
 int write_handle(int handle,char* msg){
-     char b[1024] = "";
-     bzero(b, sizeof(b));
-     sprintf(b, "%s\0",msg);
-     return write(handle, b, strlen(b) + 1);
+    // char b[1024] = "";
+    // bzero(b, sizeof(b));
+    // sprintf(b, "%s\0",msg);
+    // return write(handle, b, strlen(b) + 1);
     return 1;
 }
 
 int read_handle(char* name,char* read_buffer){
-     int handle = open(name, O_RDWR|O_CREAT);
-     memset(read_buffer, 0, MAX_BUFFER*sizeof(char));
-     int len = read(handle, read_buffer, MAX_BUFFER);
-     close(handle);
-     return len;
+    // int handle = open(name, O_RDWR|O_CREAT);
+    // memset(read_buffer, 0, MAX_BUFFER*sizeof(char));
+    // int len = read(handle, read_buffer, MAX_BUFFER);
+    // close(handle);
+    // return len;
+    return 1;
 }
 
 void timer(){
@@ -59,7 +83,7 @@ void timer(){
         int cur_time = time((time_t*)NULL);
         if(cur_time - hb_time > 60){
             LOG("失去与服务器的连接，连接已断开\n");
-            not_closed = 0;
+            not_closed = 0;                
             break;
         }
         read_handle(ip_handle,ip_buffer);
@@ -89,7 +113,7 @@ void timer(){
         LOG("%s\n",temp);
         write_handle(data_handle,temp);
         sleep(1);
-
+    
     }
 }
 
@@ -100,16 +124,16 @@ void vpn(){
 
     while(not_closed){
         FD_ZERO(&fd_s);
-        FD_SET(tun_descrip ,&fd_s);
+		FD_SET(tun_descrip ,&fd_s);
         if(select(tun_descrip + 1, &fd_s, NULL, NULL, NULL) > 0){
             struct Msg msg;
             bzero(&msg,sizeof(struct Msg));
             int length = read(tun_descrip, in_buffer, MAX_BUFFER);
-            LOG("Send %d Bytes to Server", length);
-            msg.length = 5 + length;
-            msg.type = DATA_SEND;
-            memcpy(msg.data, in_buffer, length);
-            memcpy(in_buffer, &msg, sizeof(struct Msg));
+			LOG("Send %d Bytes to Server", length);
+			msg.length = 5 + length;
+			msg.type = DATA_SEND;
+			memcpy(msg.data, in_buffer, length);
+			memcpy(in_buffer, &msg, sizeof(struct Msg));
             if(send(client_socket, in_buffer, sizeof(struct Msg), 0) > 0){
                 LOG("发送数据给服务器成功\n");
             }
@@ -162,7 +186,7 @@ void connect_to_server(){
 
     //创建timer线程
     pthread_t timer_thread;
-    if(pthread_create(&timer_thread, NULL, timer, NULL) == -1){
+	if(pthread_create(&timer_thread, NULL, timer, NULL) == -1){
         LOG("计时器线程创建失败!\n");
         return;
     }else{
@@ -202,33 +226,33 @@ void connect_to_server(){
             sscanf(msg.data,"%s %s %s %s %s",&ip.my_ip,&ip.route,&ip.DNS[0],&ip.DNS[1],&ip.DNS[2]);
             ip.is_recv = 1;
             printf("%s\n",ip.my_ip);
-
+            
             //从前端读取tun描述符
             memset(ip_buffer, 0, MAX_BUFFER);
-            int len = read(ip_handle, ip_buffer, MAX_BUFFER);
-            if(len != sizeof(int)) {
-                LOG("读取tun描述符失败\n");
-                // not_closed = 0;
+			int len = read(ip_handle, ip_buffer, MAX_BUFFER);
+			if(len != sizeof(int)) {
+				LOG("读取tun描述符失败\n");
+				// not_closed = 0;
                 // break;
-            }
+			}
             //创建vpn线程
-            tun_descrip = ntohl(*(int*)ip_buffer);
-            pthread_t vpn_thread;
-            pthread_create(&vpn_thread, NULL, vpn, NULL);
-
+			tun_descrip = ntohl(*(int*)ip_buffer);
+			pthread_t vpn_thread;
+			pthread_create(&vpn_thread, NULL, vpn, NULL);
+            
         }
         else if(msg.type == DATA_RECV){
             int sz;
-            if (( sz = write(tun_descrip, msg.data, msg.length-5)) != msg.length - 5) {
-                LOG("写入tun出错\n");
-            }else{
+			if (( sz = write(tun_descrip, msg.data, msg.length-5)) != msg.length - 5) {
+				LOG("写入tun出错\n");
+			}else{
                 LOG("成功写入tun\n");
             }
 
-            pthread_mutex_lock(&my_mutex);
-            in_time ++;
-            in_size += sz;
-            pthread_mutex_unlock(&my_mutex);
+			pthread_mutex_lock(&my_mutex);
+			in_time ++;
+			in_size += sz;
+			pthread_mutex_unlock(&my_mutex);
         }
         else if(msg.type = HEARTBEAT){
             LOG("a heartbeat received\n");
@@ -240,7 +264,7 @@ void connect_to_server(){
             }
             hb_time = cur_time;
         }
-
+        
 
     }
 
@@ -263,8 +287,8 @@ int main(void){
     close(data_handle);
 }
 
-JNIEXPORT jstring JNICALL Java_over6_over6client_MainActivity_StringFromJNI
-        (JNIEnv *env, jobject thisz){
-    main();
-    return (*env)->NewStringUTF(env,"hello from JNI");
-}
+// JNIEXPORT jstring JNICALL Java_over6_over6client_MainActivity_StringFromJNI
+//         (JNIEnv *env, jobject thisz){
+//     main();
+//     return (*env)->NewStringUTF(env,"hello from JNI");
+// }
