@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Over6Client</string>
+    <string name="connect">connect</string>
 </resources>

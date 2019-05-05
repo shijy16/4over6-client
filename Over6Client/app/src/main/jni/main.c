@@ -42,7 +42,6 @@ int write_handle(int handle,char* msg){
      bzero(b, sizeof(b));
      sprintf(b, "%s\0",msg);
      return write(handle, b, strlen(b) + 1);
-    return 1;
 }
 
 int read_handle(char* name,char* read_buffer){
@@ -62,8 +61,9 @@ void timer(){
             not_closed = 0;
             break;
         }
-        read_handle(ip_handle,ip_buffer);
+        read_handle(ip_name,ip_buffer);
         if(ip_buffer[0] == 'B' && ip_buffer[1] == 'y' && ip_buffer[2] == 'e'){
+            LOG("用户终止后台线程\n");
             not_closed = 0;
             break;
         }
@@ -94,7 +94,7 @@ void timer(){
 }
 
 void vpn(){
-    LOG("vpn已启动\n");
+    LOG("vpn已启动%d\n",tun_descrip);
     bzero(in_buffer,MAX_BUFFER);
     fd_set fd_s;
 
@@ -105,13 +105,19 @@ void vpn(){
             struct Msg msg;
             bzero(&msg,sizeof(struct Msg));
             int length = read(tun_descrip, in_buffer, MAX_BUFFER);
-            LOG("Send %d Bytes to Server", length);
+            if(length == 0){
+                continue;
+            }else if(length == -1){
+                LOG("TUN read ERROR\n");
+                continue;
+            }
             msg.length = 5 + length;
             msg.type = DATA_SEND;
-            memcpy(msg.data, in_buffer, length);
+            memcpy(msg.data, in_buffer, sizeof(struct Msg));
+            bzero(in_buffer,MAX_BUFFER);
             memcpy(in_buffer, &msg, sizeof(struct Msg));
             if(send(client_socket, in_buffer, sizeof(struct Msg), 0) > 0){
-                LOG("发送数据给服务器成功\n");
+                LOG("发送%d byte给服务器\n",msg.length);
             }
             bzero(in_buffer,MAX_BUFFER);
 
@@ -141,10 +147,9 @@ void connect_to_server(){
 
     LOG("尝试连接到服务器\n");
     if(connect(client_socket, (struct sockaddr *) &server_socket, sizeof(server_socket)) == 0) {
-        write_handle(ip_handle,"成功连接服务器\n");
         LOG("成功连接服务器\n");
     } else {
-        write_handle(ip_handle,"连接服务器失败\n");
+        write_handle(ip_handle,"ERROR\n");
         LOG("连接服务器失败\n");
         return;
     }
@@ -204,15 +209,18 @@ void connect_to_server(){
             printf("%s\n",ip.my_ip);
 
             //从前端读取tun描述符
+            sleep(1);
             memset(ip_buffer, 0, MAX_BUFFER);
-            int len = read(ip_handle, ip_buffer, MAX_BUFFER);
-            if(len != sizeof(int)) {
-                LOG("读取tun描述符失败\n");
-                // not_closed = 0;
-                // break;
+            int len = read_handle(ip_name, ip_buffer);
+            if(len <= 0) {
+                write_handle(data_handle,"ERROR");
+                LOG("读取tun描述符失败%s\n",ip_buffer);
+                not_closed = 0;
+                return;
             }
             //创建vpn线程
-            tun_descrip = ntohl(*(int*)ip_buffer);
+            tun_descrip = atoi(ip_buffer);
+            LOG("读取tun描述符成功：%d\n",tun_descrip);
             pthread_t vpn_thread;
             pthread_create(&vpn_thread, NULL, vpn, NULL);
 
@@ -250,6 +258,7 @@ void connect_to_server(){
 int main(void){
     LOG("C starting");
     //初始化管道
+    not_closed = 1;
     mknod(ip_name, 0666, 0);//创建ip管道
     ip_handle = open(ip_name, O_RDWR|O_CREAT|O_TRUNC);
     mknod(data_name, 0666, 0);//创建流量管道
@@ -261,6 +270,13 @@ int main(void){
     //关闭管道
     close(ip_handle);
     close(data_handle);
+}
+JNIEXPORT void JNICALL Java_over6_over6client_MainActivity_stopCThread
+        (JNIEnv *env, jobject thisz){
+    not_closed = 0;
+    close(ip_handle);
+    close(data_handle);
+    close(client_socket);
 }
 
 JNIEXPORT jstring JNICALL Java_over6_over6client_MainActivity_StringFromJNI
