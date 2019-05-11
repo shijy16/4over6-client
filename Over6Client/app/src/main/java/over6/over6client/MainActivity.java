@@ -29,6 +29,7 @@ public class MainActivity extends AppCompatActivity {
     String recv_route;
     String[] recv_DNS = new String[3];
     Intent vpnService;
+    String client_socket;
 
     //读取C管道
     protected String read_file(String name){
@@ -73,13 +74,17 @@ public class MainActivity extends AppCompatActivity {
                 StringFromJNI();
             }
         };
-        cThread.start();
-
-
+        try {
+            cThread.start();
+        }
+        catch (Exception e){
+            cThread.run();
+        }
         String ip = "";
         int i = 0;
         while(!(ip.contains("0.0") || ip.contains("ERROR"))){
             ip = read_file(ip_name);
+            Log.d("!!!!!!!!" ,ip + cThread.getId());
             if(ip == null) ip="";
             i++;
             if(i == 10000){
@@ -91,7 +96,6 @@ public class MainActivity extends AppCompatActivity {
             infoText.setText("连接失败");
             startBtn.setText("connect");
             write_file(ip_name, "Bye");
-            stopCThread();
             return false;
         }else {
             String[] infos = ip.split(" ");
@@ -100,6 +104,7 @@ public class MainActivity extends AppCompatActivity {
             recv_DNS[0] = infos[2];
             recv_DNS[1] = infos[3];
             recv_DNS[2] = infos[4];
+            client_socket = infos[5];
             infoText.setText(ip);
             running = true;
 
@@ -116,10 +121,11 @@ public class MainActivity extends AppCompatActivity {
             vpnService.putExtra("dns1",recv_DNS[0]);
             vpnService.putExtra("dns2", recv_DNS[1]);
             vpnService.putExtra("dns3", recv_DNS[2]);
+            vpnService.putExtra("socket", client_socket);
             startService(vpnService);
 
 
-                return true;
+            return true;
         }
     }
 
@@ -133,11 +139,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 if(running){
-                    write_file(ip_name,"Bye");
-                    infoText.setText("断开连接");
+                    write_file(ip_name, "Bye");
+                    infoText.setText("连接断开");
                     startBtn.setText("connect");
-                    stopCThread();
                     stopService(vpnService);
+                    cThread.interrupt();
+//                    stopCThread();
                     running = false;
                 }else{
                     infoText.setText("正在连接");
@@ -151,7 +158,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public native String StringFromJNI();
-    public native void stopCThread();
     static {
         System.loadLibrary("hellojni");
     }
