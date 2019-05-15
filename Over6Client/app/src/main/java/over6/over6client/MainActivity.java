@@ -2,23 +2,27 @@ package over6.over6client;
 
 import android.content.Intent;
 import android.net.VpnService;
+import android.os.Handler;
+import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.util.Timer;
 
 
 public class MainActivity extends AppCompatActivity {
     String  ip_name = "/data/data/over6.over6client/ip";
     String  data_name = "/data/data/over6.over6client/data";
-    int isCStart = 0;
+
     boolean running = false;
     private Thread cThread;
 
@@ -30,6 +34,22 @@ public class MainActivity extends AppCompatActivity {
     String[] recv_DNS = new String[3];
     Intent vpnService;
     String client_socket;
+
+    String server_ip;
+    String server_port;
+    int upload_speed = 0;
+    int download_speed = 0;
+    int pre_upload_speed;
+    int pre_download_speed;
+    int upload_packet;
+    int download_packet;
+    EditText ipText;
+    EditText portText;
+    TextView uploadSpeedText;
+    TextView uploadPacketText;
+    TextView downloadSpeedText;
+    TextView downloadPacketText;
+
 
     //读取C管道
     protected String read_file(String name){
@@ -65,7 +85,47 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
     }
-
+    Handler handler = new Handler(){
+        @Override
+        public void handleMessage(Message msg){
+            if(msg.what == 0){
+                running = false;
+                infoText.setText("连接失败");
+                startBtn.setText("connect");
+                ipText.setFocusable(true);
+                portText.setFocusable(true);
+                ipText.setFocusableInTouchMode(true);
+                portText.setFocusableInTouchMode(true);
+                startBtn.setFocusable(true);
+                write_file(ip_name, "Bye");
+            }else{
+                uploadPacketText.setText(String.valueOf(upload_packet));
+                downloadPacketText.setText(String.valueOf(download_packet));
+                if(download_speed - pre_download_speed < 1000){
+                    downloadSpeedText.setText(String.valueOf(download_speed - pre_download_speed) + " bytes/s");
+                }else if(download_speed - pre_download_speed > 1000000){
+                    double d = download_speed - pre_download_speed;
+                    d /= 1000000.0;
+                    downloadSpeedText.setText(String.valueOf(d) + " MB/s");
+                }else{
+                    double d = download_speed - pre_download_speed;
+                    d /= 1000.0;
+                    downloadSpeedText.setText(String.valueOf(d) + " KB/s");
+                }
+                if(upload_speed - pre_upload_speed < 1000){
+                    uploadSpeedText.setText(String.valueOf(upload_speed - pre_upload_speed) + " bytes/s");
+                }else if(upload_speed - pre_upload_speed > 1000000){
+                    double d = upload_speed - pre_upload_speed;
+                    d /= 1000000.0;
+                    uploadSpeedText.setText(String.valueOf(d) + " MB/s");
+                }else{
+                    double d = upload_speed - pre_upload_speed;
+                    d /= 1000.0;
+                    uploadSpeedText.setText(String.valueOf(d) + " KB/s");
+                }
+            }
+        }
+    };
     //创建C线程
     protected boolean startBackground(){
         cThread = new Thread() {
@@ -80,11 +140,47 @@ public class MainActivity extends AppCompatActivity {
         catch (Exception e){
             cThread.run();
         }
+        Thread timer = new Thread() {
+            @Override
+            public void run() {
+                int t = 0;
+                while (running) {
+                    synchronized(this) {
+                        try{
+                            wait(1000);
+                        }catch (Exception e){
+
+                        }
+                    }
+
+                    t += 1;
+                    String a = read_file(data_name);
+                    String[] datas = a.split(" ");
+                    pre_download_speed = download_speed;
+                    pre_upload_speed = upload_speed;
+                    download_packet = Integer.parseInt(datas[0]);
+                    download_speed = Integer.parseInt(datas[1]);
+                    upload_packet = Integer.parseInt(datas[2]);
+                    upload_speed = Integer.parseInt(datas[3]);
+                    Message msg = new Message();
+                    msg.what = 1;
+                    handler.sendMessage(msg);
+                    String b = read_file(ip_name);
+                    if (b.contains("ERROR")) {
+                        running = false;
+                        msg = new Message();
+                        msg.what = 0;
+                        handler.sendMessage(msg);
+                    }
+                }
+            }
+        };
+        timer.start();
         String ip = "";
         int i = 0;
         while(!(ip.contains("0.0") || ip.contains("ERROR"))){
             ip = read_file(ip_name);
-            Log.d("!!!!!!!!" ,ip + cThread.getId());
+//            Log.d("!!!!!!!!" ,ip + cThread.getId());
             if(ip == null) ip="";
             i++;
             if(i == 10000){
@@ -95,6 +191,11 @@ public class MainActivity extends AppCompatActivity {
             running = false;
             infoText.setText("连接失败");
             startBtn.setText("connect");
+            ipText.setFocusable(true);
+            portText.setFocusable(true);
+            ipText.setFocusableInTouchMode(true);
+            portText.setFocusableInTouchMode(true);
+            startBtn.setFocusable(true);
             write_file(ip_name, "Bye");
             return false;
         }else {
@@ -105,7 +206,7 @@ public class MainActivity extends AppCompatActivity {
             recv_DNS[1] = infos[3];
             recv_DNS[2] = infos[4];
             client_socket = infos[5];
-            infoText.setText(ip);
+            infoText.setText("连接成功，IP:"+recv_ip);
             running = true;
 
             //开启VPN
@@ -117,17 +218,19 @@ public class MainActivity extends AppCompatActivity {
             }
             vpnService = new Intent(this,Over6VpnService.class);
             vpnService.putExtra("ip",recv_ip);
+
             vpnService.putExtra("route",recv_route);
             vpnService.putExtra("dns1",recv_DNS[0]);
             vpnService.putExtra("dns2", recv_DNS[1]);
             vpnService.putExtra("dns3", recv_DNS[2]);
             vpnService.putExtra("socket", client_socket);
             startService(vpnService);
-
+            startBtn.setFocusable(true);
 
             return true;
         }
     }
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -135,6 +238,12 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         startBtn = (Button)findViewById(R.id.connect_btn);
         infoText = (TextView)findViewById(R.id.info);
+        ipText = (EditText)findViewById(R.id.ip);
+        portText =(EditText)findViewById(R.id.port);
+        uploadSpeedText = (TextView)findViewById(R.id.upload_speed);
+        uploadPacketText = (TextView)findViewById(R.id.upload_packet);
+        downloadSpeedText = (TextView)findViewById(R.id.download_speed);
+        downloadPacketText  = (TextView)findViewById(R.id.download_packet);
         startBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -142,16 +251,29 @@ public class MainActivity extends AppCompatActivity {
                     write_file(ip_name, "Bye");
                     infoText.setText("连接断开");
                     startBtn.setText("connect");
-                    stopService(vpnService);
+                    if(vpnService != null){
+                        stopService(vpnService);
+                    }
+                    ipText.setFocusable(true);
+                    portText.setFocusable(true);
+                    ipText.setFocusableInTouchMode(true);
+                    portText.setFocusableInTouchMode(true);
+//                    portText.requestFocus();
+//                    ipText.requestFocus();
                     cThread.interrupt();
-//                    stopCThread();
                     running = false;
                 }else{
-                    infoText.setText("正在连接");
+                    Intent intent = VpnService.prepare(MainActivity.this);
+                    server_ip = ipText.getText().toString();
+                    server_port = portText.getText().toString();
+                    ipText.setFocusable(false);
+                    portText.setFocusable(false);
+                    write_file(ip_name, server_ip + " " + server_port + " ");
+                    infoText.setText("正在连接...");
+                    running = true;
                     startBackground();
                     startBtn.setText("disconnect");
-                    running = true;
-
+                    startBtn.setFocusable(false);
                 }
             }
         });
