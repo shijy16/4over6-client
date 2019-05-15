@@ -14,7 +14,8 @@ pthread_mutex_t my_mutex;
 char ip_name[100] = "/data/data/over6.over6client/ip";
 char data_name[100] = "/data/data/over6.over6client/data";
 char ip_buffer[4105];
-
+char SERVER_ADDR[100] = "2402:f000:4:72:808::6b04";
+int  SERVER_PORT = 5678;
 
 int client_socket;
 int hb_time;
@@ -27,8 +28,10 @@ int out_size = 0;
 
 
 
-int write_handle(int handle,char msg[]){
+int write_handle(char name[],char msg[]){
      char b[1024] = "";
+    mknod(name, 0666, 0);//创建ip管道
+    int handle = open(name, O_RDWR|O_CREAT|O_TRUNC);
      bzero(b, sizeof(b));
      sprintf(b, "%s\0",msg);
      return write(handle, b, strlen(b) + 1);
@@ -77,20 +80,21 @@ void* timer(){
         //流量统计
         char temp[100];
         bzero(temp,100);
-        sprintf(temp,"recv：%d %d  send：%d %d",in_time,in_size,out_time,out_size);
+        sprintf(temp,"%d %d %d %d ",in_time,in_size,out_time,out_size);
         LOG("%s\n",temp);
-        write_handle(data_handle,temp);
+        write_handle(data_name,temp);
         sleep(1);
     }
     close(client_socket);
+    client_socket = -1;
     LOG("timer exit");
     return 0;
 }
 
-void* vpn(){
+void* data_send_thread(){
     LOG("vpn已启动%d\n",tun_descrip);
-    char vpn_buffer[MAX_BUFFER + 1];
-    bzero(vpn_buffer, MAX_BUFFER+1);
+    char buffer[MAX_BUFFER + 1];
+    bzero(buffer, MAX_BUFFER+1);
     fd_set fd_s;
     struct Msg msg;
     while(not_closed){
@@ -101,7 +105,7 @@ void* vpn(){
                  continue;
              }
              //读文件描述符
-            int length = read(tun_descrip, vpn_buffer, MAX_BUFFER);
+            int length = read(tun_descrip, buffer, MAX_BUFFER);
             if(length == 0){
                 continue;
             }else if(length == -1){
@@ -110,10 +114,10 @@ void* vpn(){
             }
             msg.length = 5 + length;
             msg.type = DATA_SEND;
-            memcpy(msg.data, vpn_buffer, length);
-            memcpy(vpn_buffer, &msg, sizeof(struct Msg));
+            memcpy(msg.data, buffer, length);
+            memcpy(buffer, &msg, sizeof(struct Msg));
              //发送给服务器
-            if(send(client_socket, vpn_buffer,  sizeof(struct Msg), 0) > 0){
+            if(send(client_socket, buffer,  sizeof(struct Msg), 0) > 0){
                 LOG("发送%d byte给服务器\n", msg.length);
                 //修改发送次数和长度
                 pthread_mutex_lock(&my_mutex);
@@ -124,7 +128,7 @@ void* vpn(){
                 LOG("VPN 发送失败\n");
                 break;
             }
-             bzero(vpn_buffer, MAX_BUFFER+1);
+             bzero(buffer, MAX_BUFFER+1);
 
         }
     }
@@ -136,7 +140,7 @@ void* vpn(){
 void connect_to_server(){
     //创建socket连接
     if((client_socket = socket(AF_INET6, SOCK_STREAM, 0)) < 0){
-        write_handle(ip_handle,"ERROR\n");
+        write_handle(ip_name,"ERROR\n");
         LOG("socket创建失败!\n");
     }
 
@@ -150,7 +154,7 @@ void connect_to_server(){
     if(connect(client_socket, (struct sockaddr *) &server_socket, sizeof(server_socket)) == 0) {
         LOG("成功连接服务器\n");
     } else {
-        write_handle(ip_handle,"ERROR\n");
+        write_handle(ip_name,"ERROR\n");
         LOG("连接服务器失败\n");
         return;
     }
@@ -170,7 +174,7 @@ void connect_to_server(){
 
     pthread_mutex_init(&my_mutex, NULL);
     pthread_t timer_thread;
-    pthread_t vpn_thread;
+    pthread_t send_thread;
 
     //创建timer线程
     if(pthread_create(&timer_thread, NULL, timer, NULL) == -1){
@@ -206,22 +210,22 @@ void connect_to_server(){
 
             //发送到前端
             sprintf(ip_buffer,"%s%d ",msg.data,client_socket);
-            write_handle(ip_handle, ip_buffer);
+            write_handle(ip_name, ip_buffer);
 
             //从前端读取tun描述符
             sleep(1);
             memset(ip_buffer, 0, MAX_BUFFER);
             int len = read_handle(ip_name, ip_buffer);
             if (len <= 0) {
-                write_handle(data_handle, "ERROR");
+                write_handle(ip_name, "ERROR");
                 LOG("读取tun描述符失败%s\n", ip_buffer);
                 not_closed = 0;
                 return;
             }
-            //创建vpn线程
+            //创建发送数据线程
             tun_descrip = atoi(ip_buffer);
             LOG("读取tun描述符成功：%d,%d\n", tun_descrip, client_socket);
-            pthread_create(&vpn_thread, NULL, vpn, NULL);
+            pthread_create(&send_thread, NULL, data_send_thread, NULL);
 
         }
         else if (msg.type == HEARTBEAT) {
@@ -257,12 +261,12 @@ void connect_to_server(){
 
 int main(void){
     LOG("C starting");
+    memset(ip_buffer,0,MAX_BUFFER);
+    int len = read_handle(ip_name,ip_buffer);
+    LOG("ip buffer:%s %d\n",ip_buffer,len);
+    sscanf(ip_buffer,"%s %d",SERVER_ADDR,&SERVER_PORT);
     //初始化管道
     not_closed = 1;
-    mknod(ip_name, 0666, 0);//创建ip管道
-    ip_handle = open(ip_name, O_RDWR|O_CREAT|O_TRUNC);
-    mknod(data_name, 0666, 0);//创建流量管道
-    data_handle = open(data_name, O_RDWR|O_CREAT|O_TRUNC);
 
     //连接到服务器
     connect_to_server();

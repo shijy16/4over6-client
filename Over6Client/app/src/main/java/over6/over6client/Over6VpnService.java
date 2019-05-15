@@ -3,13 +3,9 @@ package over6.over6client;
 import android.content.Intent;
 import android.net.VpnService;
 import android.os.ParcelFileDescriptor;
-import android.provider.ContactsContract;
 import android.util.Log;
 
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.File;
 import java.io.FileOutputStream;
 
 public class Over6VpnService extends VpnService {

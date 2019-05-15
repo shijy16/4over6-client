@@ -1,4 +1,17 @@
 <resources>
     <string name="app_name">Over6Client</string>
     <string name="connect">connect</string>
+    <string name="status">连接状态 </string>
+    <string name="disconnected">未连接</string>
+    <string name="net">网络状态</string>
+    <string name="uploads">上传速度</string>
+    <string name="downloads">下载速度</string>
+    <string name="uploadp">发包数  </string>
+    <string name="downloadp">收包数  </string>
+    <string name="zerok">0 byte/s</string>
+    <string name="zero">0</string>
+    <string name="IP">服务器IP</string>
+    <string name="PORT">服务器端口</string>
+    <string name="server_ip">2402:f000:4:72:808::6b04</string>
+    <string name="server_port">5678</string>
 </resources>
