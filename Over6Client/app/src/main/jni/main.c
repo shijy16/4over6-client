@@ -276,6 +276,11 @@ int main(void){
 
 JNIEXPORT jstring JNICALL Java_over6_over6client_MainActivity_StringFromJNI
         (JNIEnv *env, jobject thisz){
+    in_time = 0;
+    in_size = 0;
+    out_time = 0;
+    out_size = 0;
     main();
+
     return (*env)->NewStringUTF(env,"hello from JNI");
 }

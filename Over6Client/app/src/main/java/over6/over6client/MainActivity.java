@@ -39,10 +39,10 @@ public class MainActivity extends AppCompatActivity {
     String server_port;
     int upload_speed = 0;
     int download_speed = 0;
-    int pre_upload_speed;
-    int pre_download_speed;
-    int upload_packet;
-    int download_packet;
+    int pre_upload_speed = 0;
+    int pre_download_speed = 0;
+    int upload_packet = 0;
+    int download_packet = 0;
     EditText ipText;
     EditText portText;
     TextView uploadSpeedText;
@@ -98,6 +98,7 @@ public class MainActivity extends AppCompatActivity {
                 portText.setFocusableInTouchMode(true);
                 startBtn.setFocusable(true);
                 write_file(ip_name, "Bye");
+                notify();
             }else{
                 uploadPacketText.setText(String.valueOf(upload_packet));
                 downloadPacketText.setText(String.valueOf(download_packet));
@@ -251,6 +252,12 @@ public class MainActivity extends AppCompatActivity {
                     write_file(ip_name, "Bye");
                     infoText.setText("连接断开");
                     startBtn.setText("connect");
+                    upload_speed = 0;
+                    download_speed = 0;
+                    pre_upload_speed = 0;
+                    pre_download_speed = 0;
+                    upload_packet = 0;
+                    download_packet = 0;
                     if(vpnService != null){
                         stopService(vpnService);
                     }
@@ -263,6 +270,12 @@ public class MainActivity extends AppCompatActivity {
                     cThread.interrupt();
                     running = false;
                 }else{
+                    upload_speed = 0;
+                    download_speed = 0;
+                    pre_upload_speed = 0;
+                    pre_download_speed = 0;
+                    upload_packet = 0;
+                    download_packet = 0;
                     Intent intent = VpnService.prepare(MainActivity.this);
                     server_ip = ipText.getText().toString();
                     server_port = portText.getText().toString();
@@ -270,10 +283,10 @@ public class MainActivity extends AppCompatActivity {
                     portText.setFocusable(false);
                     write_file(ip_name, server_ip + " " + server_port + " ");
                     infoText.setText("正在连接...");
-                    running = true;
-                    startBackground();
                     startBtn.setText("disconnect");
                     startBtn.setFocusable(false);
+                    running = true;
+                    startBackground();
                 }
             }
         });
