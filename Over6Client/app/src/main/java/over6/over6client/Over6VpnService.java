@@ -19,6 +19,7 @@ public class Over6VpnService extends VpnService {
     public int onStartCommand(Intent intent, int flags, int startId){
         try{
             //Configure the TUN and get the interface.
+            if(intent == null) return START_NOT_STICKY;
             String ipAddress = intent.getStringExtra("ip");
             String route = intent.getStringExtra("route");
             String dns1 = intent.getStringExtra("dns1");

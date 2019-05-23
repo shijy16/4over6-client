@@ -27,6 +27,8 @@ int out_time = 0;
 int out_size = 0;
 
 
+struct epoll_event events[5];
+
 
 int write_handle(char name[],char msg[]){
      char b[1024] = "";
@@ -50,13 +52,14 @@ void* timer(){
     char sock_buffer[4105];
     struct Msg hb_msg;
     bzero(&hb_msg, sizeof(hb_msg));
-    hb_msg.length = sizeof(struct Msg);
+    hb_msg.length = 8;
     hb_msg.type = HEARTBEAT;
 
     while(not_closed){
         int cur_time = time((time_t*)NULL);
         if(cur_time - hb_time > 60){
             LOG("失去与服务器的连接，连接已断开\n");
+            write_handle(ip_name,"ERROR\n");
             not_closed = 0;
             break;
         }
@@ -70,7 +73,7 @@ void* timer(){
         ticks--;
         if(ticks == 0){
             memcpy(sock_buffer, &hb_msg, sizeof(struct  Msg));
-            if(send(client_socket, sock_buffer, sizeof(struct Msg), 0) <= 0){
+            if(send(client_socket, sock_buffer,hb_msg.length, 0) <= 0){
                 LOG("发送heartbeat失败\n");
             }else{
                 LOG("发送heartbeat成功\n");
@@ -95,15 +98,21 @@ void* data_send_thread(){
     LOG("vpn已启动%d\n",tun_descrip);
     char buffer[MAX_BUFFER + 1];
     bzero(buffer, MAX_BUFFER+1);
-    fd_set fd_s;
+//    fd_set fd_s;
+    int epfd = epoll_create(5);
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = tun_descrip;
+    epoll_ctl(epfd, EPOLL_CTL_ADD, tun_descrip, &ev);
     struct Msg msg;
     while(not_closed){
-        FD_ZERO(&fd_s);
-        FD_SET(tun_descrip ,&fd_s);
-         if(select(tun_descrip + 1, &fd_s, NULL, NULL, NULL) > 0) {
-             if(!FD_ISSET(tun_descrip,&fd_s)){
-                 continue;
-             }
+//        FD_ZERO(&fd_s);
+//        FD_SET(tun_descrip ,&fd_s);
+//         if(select(tun_descrip + 1, &fd_s, NULL, NULL, NULL) > 0) {
+        if(epoll_wait(epfd, &events, 5, 500) > 0) {
+//             if(!FD_ISSET(tun_descrip,&fd_s)){
+//                 continue;
+//             }
              //读文件描述符
             int length = read(tun_descrip, buffer, MAX_BUFFER);
             if(length == 0){
@@ -112,12 +121,12 @@ void* data_send_thread(){
                 LOG("TUN read ERROR\n");
                 break;
             }
-            msg.length = 5 + length;
+            msg.length = 8 + length;
             msg.type = DATA_SEND;
             memcpy(msg.data, buffer, length);
             memcpy(buffer, &msg, sizeof(struct Msg));
              //发送给服务器
-            if(send(client_socket, buffer,  sizeof(struct Msg), 0) > 0){
+            if(send(client_socket, buffer,  msg.length, 0) > 0){
                 LOG("发送%d byte给服务器\n", msg.length);
                 //修改发送次数和长度
                 pthread_mutex_lock(&my_mutex);
@@ -138,6 +147,7 @@ void* data_send_thread(){
 }
 
 void connect_to_server(){
+    int IP_got = 0;
     //创建socket连接
     if((client_socket = socket(AF_INET6, SOCK_STREAM, 0)) < 0){
         write_handle(ip_name,"ERROR\n");
@@ -162,11 +172,11 @@ void connect_to_server(){
     //发送ip请求
     struct Msg msg;
     bzero(&msg, sizeof(msg));
-    msg.length = sizeof(msg);
+    msg.length = 8;
     msg.type = IP_REQ;
     char sock_buffer[4105];
     memcpy(sock_buffer, &msg, sizeof(struct  Msg));
-    if(send(client_socket, sock_buffer, sizeof(struct Msg), 0) <= 0){
+    if(send(client_socket, sock_buffer, 8, 0) <= 0){
         LOG("发送ip请求失败");
     }
 
@@ -197,6 +207,7 @@ void connect_to_server(){
 
         recv(client_socket, sock_buffer, 4, 0);
         int i = 0;
+        LOG("包长度%d\n",*(int *) sock_buffer);
         for (i = 0; i < *(int *) sock_buffer - 4; i++) {
             recv(client_socket, sock_buffer + 4 + i, 1, 0);
         }
@@ -204,8 +215,9 @@ void connect_to_server(){
         memcpy(&msg, sock_buffer, sizeof(struct Msg));
         LOG("接收到%d\n", msg.type);
         //服务器回复的IP请求
-        if (msg.type == IP_REP) {
+        if (msg.type == IP_REP && IP_got == 0) {
             LOG("收到IP回复 %s\n",msg.data);
+            IP_got = 1;
             memset(ip_buffer, 0, MAX_BUFFER);
 
             //发送到前端
@@ -232,6 +244,7 @@ void connect_to_server(){
             LOG("a heartbeat received\n");
             int cur_time = time((time_t *) NULL);
             if (cur_time - hb_time > 60) {
+                write_handle(ip_name,"ERROR\n");
                 LOG("失去与服务器的连接，连接已断开");
                 not_closed = 0;
                 break;
@@ -276,6 +289,11 @@ int main(void){
 
 JNIEXPORT jstring JNICALL Java_over6_over6client_MainActivity_StringFromJNI
         (JNIEnv *env, jobject thisz){
+    in_time = 0;
+    in_size = 0;
+    out_time = 0;
+    out_size = 0;
     main();
+    write_handle(ip_name,"ERROR\n");
     return (*env)->NewStringUTF(env,"hello from JNI");
 }

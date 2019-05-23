@@ -39,10 +39,10 @@ public class MainActivity extends AppCompatActivity {
     String server_port;
     int upload_speed = 0;
     int download_speed = 0;
-    int pre_upload_speed;
-    int pre_download_speed;
-    int upload_packet;
-    int download_packet;
+    int pre_upload_speed = 0;
+    int pre_download_speed = 0;
+    int upload_packet = 0;
+    int download_packet = 0;
     EditText ipText;
     EditText portText;
     TextView uploadSpeedText;
@@ -90,6 +90,8 @@ public class MainActivity extends AppCompatActivity {
         public void handleMessage(Message msg){
             if(msg.what == 0){
                 running = false;
+                if(vpnService != null)
+                    stopService(vpnService);
                 infoText.setText("连接失败");
                 startBtn.setText("connect");
                 ipText.setFocusable(true);
@@ -97,8 +99,14 @@ public class MainActivity extends AppCompatActivity {
                 ipText.setFocusableInTouchMode(true);
                 portText.setFocusableInTouchMode(true);
                 startBtn.setFocusable(true);
+                downloadSpeedText.setText(" ");
+                downloadPacketText.setText(" ");
+                uploadSpeedText.setText(" ");
+                uploadPacketText.setText(" ");
                 write_file(ip_name, "Bye");
+                notify();
             }else{
+                if(!running) return;
                 uploadPacketText.setText(String.valueOf(upload_packet));
                 downloadPacketText.setText(String.valueOf(download_packet));
                 if(download_speed - pre_download_speed < 1000){
@@ -154,14 +162,20 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     t += 1;
-                    String a = read_file(data_name);
-                    String[] datas = a.split(" ");
                     pre_download_speed = download_speed;
                     pre_upload_speed = upload_speed;
-                    download_packet = Integer.parseInt(datas[0]);
-                    download_speed = Integer.parseInt(datas[1]);
-                    upload_packet = Integer.parseInt(datas[2]);
-                    upload_speed = Integer.parseInt(datas[3]);
+
+                    try {
+                        String a = read_file(data_name);
+                        String[] datas = a.split(" ");
+
+                        download_packet = Integer.parseInt(datas[0]);
+                        download_speed = Integer.parseInt(datas[1]);
+                        upload_packet = Integer.parseInt(datas[2]);
+                        upload_speed = Integer.parseInt(datas[3]);
+                    }catch (Exception e){
+                        continue;
+                    }
                     Message msg = new Message();
                     msg.what = 1;
                     handler.sendMessage(msg);
@@ -196,6 +210,10 @@ public class MainActivity extends AppCompatActivity {
             ipText.setFocusableInTouchMode(true);
             portText.setFocusableInTouchMode(true);
             startBtn.setFocusable(true);
+            downloadSpeedText.setText(" ");
+            downloadPacketText.setText(" ");
+            uploadSpeedText.setText(" ");
+            uploadPacketText.setText(" ");
             write_file(ip_name, "Bye");
             return false;
         }else {
@@ -248,9 +266,19 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 if(running){
+                    downloadSpeedText.setText(" ");
+                    downloadPacketText.setText(" ");
+                    uploadSpeedText.setText(" ");
+                    uploadPacketText.setText(" ");
                     write_file(ip_name, "Bye");
                     infoText.setText("连接断开");
                     startBtn.setText("connect");
+                    upload_speed = 0;
+                    download_speed = 0;
+                    pre_upload_speed = 0;
+                    pre_download_speed = 0;
+                    upload_packet = 0;
+                    download_packet = 0;
                     if(vpnService != null){
                         stopService(vpnService);
                     }
@@ -263,6 +291,12 @@ public class MainActivity extends AppCompatActivity {
                     cThread.interrupt();
                     running = false;
                 }else{
+                    upload_speed = 0;
+                    download_speed = 0;
+                    pre_upload_speed = 0;
+                    pre_download_speed = 0;
+                    upload_packet = 0;
+                    download_packet = 0;
                     Intent intent = VpnService.prepare(MainActivity.this);
                     server_ip = ipText.getText().toString();
                     server_port = portText.getText().toString();
@@ -270,10 +304,10 @@ public class MainActivity extends AppCompatActivity {
                     portText.setFocusable(false);
                     write_file(ip_name, server_ip + " " + server_port + " ");
                     infoText.setText("正在连接...");
-                    running = true;
-                    startBackground();
                     startBtn.setText("disconnect");
                     startBtn.setFocusable(false);
+                    running = true;
+                    startBackground();
                 }
             }
         });

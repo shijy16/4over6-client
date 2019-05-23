@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include<arpa/inet.h>
 #include <pthread.h>
+#include <sys/epoll.h>
 
 #include "over6_over6client_MainActivity.h"
 
